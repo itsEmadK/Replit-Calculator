@@ -1,10 +1,19 @@
 import { useState, useEffect, useCallback } from "react";
+import { formatNumberForDisplay } from "@/lib/utils";
+
+// Define a history entry type
+interface HistoryEntry {
+  calculation: string;
+  result: string;
+  timestamp: Date;
+}
 
 interface CalculatorState {
   currentValue: string;
   previousValue: string | null;
   operation: string | null;
   resetOnNextDigit: boolean;
+  scientificMode: boolean;
 }
 
 export const useCalculator = () => {
@@ -12,9 +21,11 @@ export const useCalculator = () => {
     currentValue: "0",
     previousValue: null,
     operation: null,
-    resetOnNextDigit: false
+    resetOnNextDigit: false,
+    scientificMode: false
   });
 
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [previousOperation, setPreviousOperation] = useState("");
 
   // Format numbers to avoid excessive decimal places
@@ -27,6 +38,14 @@ export const useCalculator = () => {
     const strNum = num.toFixed(10);
     // Remove trailing zeros
     return parseFloat(strNum).toString();
+  };
+
+  // Toggle scientific mode
+  const toggleScientificMode = () => {
+    setState(prev => ({
+      ...prev,
+      scientificMode: !prev.scientificMode
+    }));
   };
 
   // Update the previous operation display
@@ -50,6 +69,12 @@ export const useCalculator = () => {
       case "divide":
         operationSymbol = "÷";
         break;
+      case "power":
+        operationSymbol = "^";
+        break;
+      case "root":
+        operationSymbol = "√";
+        break;
     }
     
     setPreviousOperation(`${state.previousValue} ${operationSymbol}`);
@@ -59,6 +84,23 @@ export const useCalculator = () => {
     updatePreviousOperationDisplay();
   }, [state.previousValue, state.operation, updatePreviousOperationDisplay]);
 
+  // Add to history
+  const addToHistory = (calculation: string, result: string) => {
+    setHistory(prev => [
+      {
+        calculation,
+        result,
+        timestamp: new Date()
+      },
+      ...prev
+    ]);
+  };
+
+  // Clear history
+  const clearHistory = () => {
+    setHistory([]);
+  };
+
   // Perform the actual calculation based on current state
   const performCalculation = useCallback(() => {
     if (!state.previousValue || !state.operation) return;
@@ -66,16 +108,21 @@ export const useCalculator = () => {
     const prev = parseFloat(state.previousValue);
     const current = parseFloat(state.currentValue);
     let result: string | number;
+    let calculationText = "";
+    let operationSymbol = "";
     
     switch (state.operation) {
       case "add":
         result = prev + current;
+        operationSymbol = "+";
         break;
       case "subtract":
         result = prev - current;
+        operationSymbol = "–";
         break;
       case "multiply":
         result = prev * current;
+        operationSymbol = "×";
         break;
       case "divide":
         if (current === 0) {
@@ -83,6 +130,19 @@ export const useCalculator = () => {
         } else {
           result = prev / current;
         }
+        operationSymbol = "÷";
+        break;
+      case "power":
+        result = Math.pow(prev, current);
+        operationSymbol = "^";
+        break;
+      case "root":
+        if (current <= 0) {
+          result = "Error";
+        } else {
+          result = Math.pow(prev, 1 / current);
+        }
+        operationSymbol = "^(1/";
         break;
       default:
         return;
@@ -92,12 +152,247 @@ export const useCalculator = () => {
     const formattedResult = result === "Error" ? 
       result : 
       formatNumber(result as number);
+    
+    // Create calculation text for history
+    if (state.operation === "root") {
+      calculationText = `${prev} ${operationSymbol}${current})`;
+    } else {
+      calculationText = `${prev} ${operationSymbol} ${current}`;
+    }
+    
+    // Add to history if result is valid
+    if (formattedResult !== "Error") {
+      addToHistory(calculationText, formattedResult);
+    }
       
     setState(prev => ({
       ...prev,
       currentValue: formattedResult
     }));
   }, [state]);
+
+  // Scientific functions
+  const handleSin = () => {
+    const value = parseFloat(state.currentValue);
+    const result = Math.sin(value);
+    const formattedResult = formatNumber(result);
+    
+    addToHistory(`sin(${value})`, formattedResult);
+    
+    setState(prev => ({
+      ...prev,
+      currentValue: formattedResult,
+      resetOnNextDigit: true
+    }));
+  };
+
+  const handleCos = () => {
+    const value = parseFloat(state.currentValue);
+    const result = Math.cos(value);
+    const formattedResult = formatNumber(result);
+    
+    addToHistory(`cos(${value})`, formattedResult);
+    
+    setState(prev => ({
+      ...prev,
+      currentValue: formattedResult,
+      resetOnNextDigit: true
+    }));
+  };
+
+  const handleTan = () => {
+    const value = parseFloat(state.currentValue);
+    const result = Math.tan(value);
+    const formattedResult = formatNumber(result);
+    
+    addToHistory(`tan(${value})`, formattedResult);
+    
+    setState(prev => ({
+      ...prev,
+      currentValue: formattedResult,
+      resetOnNextDigit: true
+    }));
+  };
+
+  const handleLog = () => {
+    const value = parseFloat(state.currentValue);
+    if (value <= 0) {
+      setState(prev => ({
+        ...prev,
+        currentValue: "Error",
+        resetOnNextDigit: true
+      }));
+      return;
+    }
+    
+    const result = Math.log10(value);
+    const formattedResult = formatNumber(result);
+    
+    addToHistory(`log(${value})`, formattedResult);
+    
+    setState(prev => ({
+      ...prev,
+      currentValue: formattedResult,
+      resetOnNextDigit: true
+    }));
+  };
+
+  const handleLn = () => {
+    const value = parseFloat(state.currentValue);
+    if (value <= 0) {
+      setState(prev => ({
+        ...prev,
+        currentValue: "Error",
+        resetOnNextDigit: true
+      }));
+      return;
+    }
+    
+    const result = Math.log(value);
+    const formattedResult = formatNumber(result);
+    
+    addToHistory(`ln(${value})`, formattedResult);
+    
+    setState(prev => ({
+      ...prev,
+      currentValue: formattedResult,
+      resetOnNextDigit: true
+    }));
+  };
+
+  const handlePi = () => {
+    const result = Math.PI;
+    const formattedResult = formatNumber(result);
+    
+    setState(prev => ({
+      ...prev,
+      currentValue: formattedResult,
+      resetOnNextDigit: true
+    }));
+  };
+
+  const handleE = () => {
+    const result = Math.E;
+    const formattedResult = formatNumber(result);
+    
+    setState(prev => ({
+      ...prev,
+      currentValue: formattedResult,
+      resetOnNextDigit: true
+    }));
+  };
+
+  const handleSquare = () => {
+    const value = parseFloat(state.currentValue);
+    const result = value * value;
+    const formattedResult = formatNumber(result);
+    
+    addToHistory(`${value}²`, formattedResult);
+    
+    setState(prev => ({
+      ...prev,
+      currentValue: formattedResult,
+      resetOnNextDigit: true
+    }));
+  };
+
+  const handleCube = () => {
+    const value = parseFloat(state.currentValue);
+    const result = value * value * value;
+    const formattedResult = formatNumber(result);
+    
+    addToHistory(`${value}³`, formattedResult);
+    
+    setState(prev => ({
+      ...prev,
+      currentValue: formattedResult,
+      resetOnNextDigit: true
+    }));
+  };
+
+  const handleSqrt = () => {
+    const value = parseFloat(state.currentValue);
+    if (value < 0) {
+      setState(prev => ({
+        ...prev,
+        currentValue: "Error",
+        resetOnNextDigit: true
+      }));
+      return;
+    }
+    
+    const result = Math.sqrt(value);
+    const formattedResult = formatNumber(result);
+    
+    addToHistory(`√${value}`, formattedResult);
+    
+    setState(prev => ({
+      ...prev,
+      currentValue: formattedResult,
+      resetOnNextDigit: true
+    }));
+  };
+
+  const handleCbrt = () => {
+    const value = parseFloat(state.currentValue);
+    const result = Math.cbrt(value);
+    const formattedResult = formatNumber(result);
+    
+    addToHistory(`∛${value}`, formattedResult);
+    
+    setState(prev => ({
+      ...prev,
+      currentValue: formattedResult,
+      resetOnNextDigit: true
+    }));
+  };
+
+  const handlePower = () => {
+    setState(prev => ({
+      ...prev,
+      previousValue: prev.currentValue,
+      operation: "power",
+      resetOnNextDigit: true
+    }));
+  };
+
+  const handleRoot = () => {
+    setState(prev => ({
+      ...prev,
+      previousValue: prev.currentValue,
+      operation: "root",
+      resetOnNextDigit: true
+    }));
+  };
+
+  const handleFactorial = () => {
+    const value = parseFloat(state.currentValue);
+    
+    if (value < 0 || !Number.isInteger(value)) {
+      setState(prev => ({
+        ...prev,
+        currentValue: "Error",
+        resetOnNextDigit: true
+      }));
+      return;
+    }
+    
+    // Calculate factorial
+    let result = 1;
+    for (let i = 2; i <= value; i++) {
+      result *= i;
+    }
+    
+    const formattedResult = formatNumber(result);
+    
+    addToHistory(`${value}!`, formattedResult);
+    
+    setState(prev => ({
+      ...prev,
+      currentValue: formattedResult,
+      resetOnNextDigit: true
+    }));
+  };
 
   // Handle digit button clicks
   const handleDigit = (digit: string) => {
@@ -157,7 +452,8 @@ export const useCalculator = () => {
       currentValue: "0",
       previousValue: null,
       operation: null,
-      resetOnNextDigit: false
+      resetOnNextDigit: false,
+      scientificMode: state.scientificMode
     });
   };
   
@@ -180,10 +476,14 @@ export const useCalculator = () => {
     if (state.currentValue === "Error") return;
     
     const value = parseFloat(state.currentValue);
+    const result = value / 100;
+    const formattedResult = formatNumber(result);
+    
+    addToHistory(`${value}%`, formattedResult);
     
     setState(prev => ({
       ...prev,
-      currentValue: formatNumber(value / 100)
+      currentValue: formattedResult
     }));
   };
   
@@ -244,6 +544,8 @@ export const useCalculator = () => {
       } else if (key === "/") {
         event.preventDefault(); // Prevent browser search
         handleOperation("divide");
+      } else if (key === "^") {
+        handlePower();
       } else if (key === "=" || key === "Enter") {
         event.preventDefault(); // Prevent form submission
         handleEquals();
@@ -264,6 +566,8 @@ export const useCalculator = () => {
   return {
     currentValue: state.currentValue,
     previousOperation,
+    scientificMode: state.scientificMode,
+    history,
     handleDigit,
     handleOperation,
     handleEquals,
@@ -271,6 +575,23 @@ export const useCalculator = () => {
     handleToggleSign,
     handlePercentage,
     handleDecimal,
-    handleBackspace
+    handleBackspace,
+    toggleScientificMode,
+    clearHistory,
+    // Scientific functions
+    handleSin,
+    handleCos,
+    handleTan,
+    handleLog,
+    handleLn,
+    handlePi,
+    handleE,
+    handleSquare,
+    handleCube,
+    handleSqrt,
+    handleCbrt,
+    handlePower,
+    handleRoot,
+    handleFactorial
   };
 };
